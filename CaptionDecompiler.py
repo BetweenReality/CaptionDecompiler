@@ -49,8 +49,8 @@ def ranged_type(value_type, min_value, max_value):
 parser = argparse.ArgumentParser(description="Decompiles Source Engine caption .dat files back into text")
 
 # IO
-parser.add_argument("--input", "-i", required=True, type=argparse.FileType("r"), help="Path to caption dat file")
-parser.add_argument("--output", "-o", type=str, help="Path to output. Defaults to samedir/samename_d.txt. To disable the '_d' use the '-ns' switch")
+parser.add_argument("--input", "-i", required=True, type=argparse.FileType("r"), help="(Required) Path to caption dat file")
+parser.add_argument("--output", "-o", type=str, help="Path to output. Defaults to ./samename_d.txt. To disable the '_d' use the '-ns' switch")
 
 # Soundscript matching inputs
 gsArg = parser.add_argument("--sound-dir", "-sd", nargs="?", const="Auto", help="Directory containing soundscripts and game_sounds_manifest.txt. These will be searched to match soundscript name hashes. If SOUND_DIR is not provided, attempts to automatically find game_sounds_manifest.txt based on the location of the input")
@@ -82,10 +82,12 @@ def main():
         if (args.sound_dir and     os.path.isfile(args.sound_dir)): raise argparse.ArgumentError(gsArg, "Must be a directory")
     else:
         # Automatically check for path and warn if it is not found
+        print("No sound-dir provided, attempting to automatic search")
         args.sound_dir = os.path.join(filepath, os.path.pardir, "scripts")
     if (not os.path.exists(args.sound_dir)):
         args.sound_dir = None
         print("Warning: Could not find game_sounds_manifest.txt")
+    elif (args.sound_dir == "Auto"): print(f"Found sound-dir at {args.sound_dir}")
     
     if (filepath == "."): filepath = ""
     filenameNoExt = os.path.splitext(os.path.basename(args.input.name))[0]
@@ -105,8 +107,9 @@ def main():
     outputFile = ""
     if (args.output): outputFile = args.output
     else:
-        if (filepath == "."): outputFile = filepath
-        outputFile += filenameNoExt
+        # if (filepath == "."): outputFile = filepath
+        # outputFile += filenameNoExt
+        outputFile = os.path.join(".", filenameNoExt)
         if (not args.no_suffix): outputFile += "_d.txt"
     if (os.path.exists(outputFile)):
         print("WARNING: Output will overwrite " + outputFile)

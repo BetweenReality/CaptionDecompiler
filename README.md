@@ -25,8 +25,8 @@ You can provide the program the path to these files, either the path to the dire
 
 ### Parameters
 
-- `--input INPUT, -i INPUT`                       Path to caption dat file
-- `--output OUTPUT, -o OUTPUT`                    Path to output. Defaults to samedir/samename_d.txt. To disable the '_d' use the '-ns' switch
+- `--input INPUT, -i INPUT`                       (Required) Path to caption dat file
+- `--output OUTPUT, -o OUTPUT`                    Path to output. Defaults to ./samename_d.txt. To disable the '_d' use the '-ns' switch
 
 - `--sound-dir [SOUND_DIR], -sd [SOUND_DIR]`      Directory containing soundscripts and game_sounds_manifest.txt. These will be searched to match soundscript name hashes. If SOUND_DIR is not provided, it attempts to automatically find game_sounds_manifest.txt based on the location of the input
 - `--sound-script SOUND_SCRIPT, -ss SOUND_SCRIPT` Direct path to a soundscript file. Can add as many as you want
