@@ -53,10 +53,12 @@ parser.add_argument("--input", "-i", required=True, type=argparse.FileType("r"),
 parser.add_argument("--output", "-o", type=str, help="Path to output. Defaults to ./samename_d.txt. To disable the '_d' use the '-ns' switch")
 
 # Soundscript matching inputs
-gsArg = parser.add_argument("--sound-dir", "-sd", nargs="?", const="Auto", help="Directory containing soundscripts and game_sounds_manifest.txt. These will be searched to match soundscript name hashes. If SOUND_DIR is not provided, attempts to automatically find game_sounds_manifest.txt based on the location of the input")
+# gsArg = parser.add_argument("--sound-dir", "-sd", nargs="?", const="Auto", help="Directory containing soundscripts and game_sounds_manifest.txt. These will be searched to match soundscript name hashes. If SOUND_DIR is not provided, attempts to automatically find game_sounds_manifest.txt based on the location of the input")
+gsArg = parser.add_argument("--sound-dir", "-sd", action="append", type=str, help="Directory containing soundscripts and game_sounds_manifest.txt. These will be searched to match soundscript name hashes. By default this automatically attempts to be found. To disable this behavior, use the '-nas' switch")
 parser.add_argument("--sound-script", "-ss", action="append", type=str, help="Direct path to a soundscript file. Can add as many as you want")
 parser.add_argument("--sound-name", "-sn", action="append", type=str, help="A direct soundscript name to match against. Can add as many as you want")
 parser.add_argument("--sound-list", "-sl", action="append", type=argparse.FileType("r"), help="A file containing a newline-separated list of soundscript names. Makes no attempt to validate this format, so be careful")
+parser.add_argument("--no-auto-sounds", "-nas", action="store_true", help="Disables automatically attempting to find soundscript files")
 
 # Misc
 parser.add_argument("--language", "-l", action="store", type=str, help="Manually set the output language. Default is automatically guessed based on the filename. If your filename has a non-standard format you should probably set this, otherwise it will either be incorrect or blank")
@@ -77,17 +79,18 @@ args = parser.parse_args()
 def main():
     filepath = os.path.dirname(args.input.name)
     
-    if (args.sound_dir != "Auto"):
-        if (args.sound_dir and not os.path.exists(args.sound_dir)): raise argparse.ArgumentError(gsArg, "Path does not exist: " + args.sound_dir)
-        if (args.sound_dir and     os.path.isfile(args.sound_dir)): raise argparse.ArgumentError(gsArg, "Must be a directory")
-    else:
-        # Automatically check for path and warn if it is not found
-        print("No sound-dir provided, attempting to automatic search")
-        args.sound_dir = os.path.join(filepath, os.path.pardir, "scripts")
-    if (not os.path.exists(args.sound_dir)):
-        args.sound_dir = None
-        print("Warning: Could not find game_sounds_manifest.txt")
-    elif (args.sound_dir == "Auto"): print(f"Found sound-dir at {args.sound_dir}")
+    # Validate provided sound paths and auto path
+    if (args.sound_dir):
+        for dir in args.sound_dir:
+            if (not os.path.exists(dir)): raise argparse.ArgumentError(gsArg, f"Path does not exist: {dir}")
+            if (    os.path.isfile(dir)): raise argparse.ArgumentError(gsArg, "Must be a directory")
+    elif (not args.no_auto_sounds):
+        print("No sound-dir provided, attempting automatic search")
+        args.sound_dir = [os.path.join(filepath, os.path.pardir, "scripts")]
+        if (not os.path.exists(os.path.join(args.sound_dir[0], "game_sounds_manifest.txt"))):
+            print(f"Warning: Could not find game_sounds_manifest.txt in {args.sound_dir[0]}")
+            args.sound_dir = None
+        else: print(f"\tFound sound-dir at {args.sound_dir[0]}")
     
     if (filepath == "."): filepath = ""
     filenameNoExt = os.path.splitext(os.path.basename(args.input.name))[0]
@@ -97,7 +100,7 @@ def main():
     else:
         # Get language based on caption file name
         # The format shouldn't be a problem under most circumstances but it's better to check anyway in case the file name doesn't follow the standard one for whatever reason
-        # NOTE: Technically this is a bit lenient on the format so the auto detected language might be bad for nonstandard formats.
+        # TODO: Technically this is a bit lenient on the format so the auto detected language might be bad for nonstandard formats.
         #   I don't know how I would fix this other than at least detecting the beginning of the name, since there is only a limited set of those that are usually used
         #   I guess there is also a limited number of languages too but that's a bit much to check for something so frivolous that will likely never be a problem anyway
         if (re.match(r"[a-zA-Z0-9]+_[a-zA-Z0-9]+", filenameNoExt)): language = filenameNoExt.split("_")[1]
@@ -188,15 +191,20 @@ def readCaptionBlocks(file:TextIOWrapper, captionDirEntries:dict, soundscriptCan
     attemptingHashMatching = len(soundscriptCandidates) > 0
     
     print("Reading caption blocks", end="")
-    if (attemptingHashMatching): print(" and attempting to match hashes and names", end="")
+    if (args.same_hashes):
+        if (attemptingHashMatching): print(", attempting to match hashes to names,", end="")
+        print(" and generating new names", end="")
+        if (attemptingHashMatching): print(" for unfound hashes", end="")
+    elif (attemptingHashMatching):
+        print(" and attempting to match hashes to names", end="")
     print("...")
     
     verbosePrintPadding = ""
     maxCapLen = 10
     if (args.verbose >= 2):
         # HACK: We don't have access to the actual maxCaptionLength yet, so we fake it by getting the max length from all candidates
-        #   We could preemptively calculate the actual length, but then we would have to do 2 loops through all captions, which is inefficient.
-        #   This works good enough, worst case scenario the padding is a bit too large. Otherwise we can just set a static max padding, but I feel like that sucks more
+        #   We could preemptively calculate the actual length, but then we would have to do 2 loops through all captions, which is inefficient
+        #   This works good enough, worst case scenario the padding is a bit too large. Otherwise we can just set a static max padding, but I feel like that sucks more than this solution
         if (attemptingHashMatching):
             for entry in soundscriptCandidates.values():
                 if (len(entry) > maxCapLen):
@@ -205,7 +213,7 @@ def readCaptionBlocks(file:TextIOWrapper, captionDirEntries:dict, soundscriptCan
         for _ in range(maxCapLen - 4): verbosePrintPadding += " "
         
         # NOTE: I don't actually know the full specifications of caption files, but assuming the block count can exceed 100,000 the padding here may not always be enough
-        #   That would be exceedingly rare if even possible, and likely no caption files even exist with that size, so this is fine
+        #   That would be exceedingly rare if even possible, and likely no caption files even exist with that size so this is fine
         print("------------------------------------------------")
         print("| BLOCK".ljust(8, " ") + f"| NAME{verbosePrintPadding} | CAPTION")
     
@@ -234,17 +242,19 @@ def readCaptionBlocks(file:TextIOWrapper, captionDirEntries:dict, soundscriptCan
                 ssHashMatches+=1
             else:
                 if (args.verbose >= 2): print("|>", end="")
-                if (args.verbose >= 1): print(f"\tCould not find match for hash {captionName} (line {captionLineIndex})", end="")
-                # Append new string to the end of the caption name (which is just the original hash since we didn't find the real name)
-                #   This new appended bit ensures that the hash of this new name matches the original, which allows us to recompile the output exactly the same as the original
-                #   For most cases this is probably unnecessary, since in order for it to matter it would need to exist as a soundscape somewhere (which we should have already found by now)
-                # NOTE: This still doesn't technically produce an "identical" compiled output since the new caption names will be sorted differently by the compiler, but that shouldn't matter for 99.99% of cases
-                #   We could theoretically fix this by prepending some starting characters to match the order of the surrounding caption names alphabetically, but that's pretty much useless like I said
-                if (args.same_hashes == True):
-                    if (args.verbose >= 1): print(". Generating new name... ")
-                    captionName = generateStrWithNewCRC(str(entry["hash"]).rjust(10, "0")+".", entry["hash"])
-                    if (args.verbose >= 2): print(f"|>>\t\tNEW NAME GENERATED: {captionName}")
-                elif (args.verbose >= 1): print() # Newline
+                if (args.verbose >= 1):
+                    print(f"\tCould not find match for hash {captionName} (line {captionLineIndex})", end="")
+                    if (args.same_hashes == True): print(". Generating new name... ", end="")
+                    print() # Newline
+        
+        # Append new string to the end of the caption name (which is just the original hash since we didn't find the real name)
+        #   This new appended bit ensures that the hash of this new name matches the original, which allows us to recompile the output exactly the same as the original
+        #   For most cases this is probably unnecessary, since in order for it to matter it would need to exist as a soundscape somewhere (which we should have already found by now)
+        # TODO: This still doesn't technically produce an "identical" compiled output since the new caption names will be sorted differently by the compiler, but that shouldn't matter for 99.99% of cases
+        #   We could theoretically fix this by prepending some starting characters to match the order of the surrounding caption names alphabetically, but that's pretty much useless anyway like I said
+        if (args.same_hashes == True):
+            captionName = generateStrWithNewCRC(str(entry["hash"]).rjust(10, "0")+".", entry["hash"])
+            if (args.verbose >= 2): print(f"|>>\t\tNEW NAME GENERATED: {captionName}")
         
         captionLineIndex+=1
         
@@ -264,11 +274,12 @@ def readCaptionBlocks(file:TextIOWrapper, captionDirEntries:dict, soundscriptCan
     # Theoretically all relevant subtitles should be found (if the user provided the proper paths/files to check), however there might be unused ones left over that no longer exist as soundscripts.
     #   In any case, this means that the relevant game never uses this caption anyway and it is up to the user to remake it if they want to use it.
     #   If there is an existing subtitle .txt file, (then you shouldn't even be using this decompiler anyway, but) it probably has the actual unused soundscript names in it
-    print(f"Hashes found: {ssHashMatches}, Expected: {len(captionDirEntries)}")
-    if (ssHashMatches != len(captionDirEntries)):
-        print(f"WARNING: Did not find names for {len(captionDirEntries) - ssHashMatches} captions! (Either we couldn't find them or they are unused)")
-    else:
-        print("All caption names found")
+    if (attemptingHashMatching):
+        print(f"Hashes found: {ssHashMatches}, Expected: {len(captionDirEntries)}")
+        if (ssHashMatches != len(captionDirEntries)):
+            print(f"WARNING: Did not find names for {len(captionDirEntries) - ssHashMatches} captions! (Either we couldn't find them or they are unused)")
+        else:
+            print("All caption names found")
     
     return finalCaptions
 
@@ -316,11 +327,14 @@ def getSoundscriptsFromFiles() -> dict:
         
         # Read game_sounds_manifest and extract all referenced files
         if (args.sound_dir):
-            path = os.path.join(args.sound_dir, "game_sounds_manifest.txt")
-            with open(path, mode="r") as manifest:
-                for fileEntry in Keyvalues.parse(manifest.read())[0]:
-                    entry = fileEntry.serialise().replace("\"", "").split()
-                    if (entry[0] == "precache_file"): gameSoundsFiles.append(os.path.abspath(os.path.join(args.sound_dir, os.pardir, entry[1])))
+            if (args.verbose >= 1): print(f"Checking for soundscript files in {len(args.sound_dir)} locations...")
+            for dir in args.sound_dir:
+                if (args.verbose >= 1): print(f"\tChecking {dir}")
+                path = os.path.join(dir, "game_sounds_manifest.txt")
+                with open(path, mode="r") as manifest:
+                    for fileEntry in Keyvalues.parse(manifest.read())[0]:
+                        entry = fileEntry.serialise().replace("\"", "").split()
+                        if (entry[0] == "precache_file"): gameSoundsFiles.append(os.path.abspath(os.path.join(dir, os.pardir, entry[1])))
         
         # Add manual soundscript file entries
         if (args.sound_script):
