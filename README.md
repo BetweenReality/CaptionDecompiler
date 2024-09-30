@@ -28,10 +28,11 @@ You can provide the program the path to these files, either the path to the dire
 - `--input INPUT, -i INPUT`                       (Required) Path to caption dat file
 - `--output OUTPUT, -o OUTPUT`                    Path to output. Defaults to ./samename_d.txt. To disable the '_d' use the '-ns' switch
 
-- `--sound-dir [SOUND_DIR], -sd [SOUND_DIR]`      Directory containing soundscripts and game_sounds_manifest.txt. These will be searched to match soundscript name hashes. If SOUND_DIR is not provided, it attempts to automatically find game_sounds_manifest.txt based on the location of the input
+- `--sound-dir [SOUND_DIR], -sd [SOUND_DIR]`      Directory containing soundscripts and game_sounds_manifest.txt. These will be searched to match soundscript name hashes. By default this automatically attempts to be found. To disable this behavior, use the '-nas' switch
 - `--sound-script SOUND_SCRIPT, -ss SOUND_SCRIPT` Direct path to a soundscript file. Can add as many as you want
 - `--sound-name SOUND_NAME, -sn SOUND_NAME`       A direct soundscript name to match against. Can add as many as you want
 - `--sound-list SOUND_LIST, -sl SOUND_LIST`       A file containing a newline-separated list of soundscript names. Makes no attempt to validate this format, so be careful
+- `--no-auto-sounds, -nas`                        Disables automatically attempting to find soundscript files
 
 - `--language LANGUAGE, -l LANGUAGE`              Manually set the output language. Default is automatically guessed based on the filename. If your filename has a non-standard format you should probably set this, otherwise it will either be incorrect or blank
 - `--same-hashes, -sh`                            Ensures all unfound soundscript names compile to the same hash. May increase computation time dramatically if there are a lot of missing names
