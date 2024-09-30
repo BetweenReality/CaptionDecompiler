@@ -68,13 +68,21 @@ parser.add_argument("--same-hashes", "-sh", action="store_true", help="Ensures a
 parser.add_argument("--no-suffix", "-ns", action="store_true", help="Disables adding the '_d' suffix to the end of the automatic file name")
 parser.add_argument("--padding", "-p", action="store", type=int, default=4, help="(AKA tab-size) Padding size for the output. Defaults to 4. Note that your editor must match this size to display alignment correctly (if using tabs)")
 parser.add_argument("--no-align", "-na", action="store_true", help="Disables output caption alignment")
-parser.add_argument("--tabs", "-t", action="store_true", help="DISABLES tabs for padding, and instead uses spaces")
+parser.add_argument("--no-tabs", "-t", action="store_true", help="Disables tabs for padding, and instead uses spaces")
 
 # Meta
 parser.add_argument("--accept", "-a", action="store_true", help="Automatically accepts all dialogs. Right now there is only an output file overwrite confirmation")
-parser.add_argument("--verbose", "-v", action="store", type=ranged_type(int, 0, 2), default=0, help="Increase output verbosity (0 - 2). Defaults to 0")
+parser.add_argument("--verbosity", "-v", action="store", type=ranged_type(int, 0, 3), default=1, help="Set output verbosity (0 - 3). Defaults to 1. 0 disables console output, except for required dialogs (which can be auto accepted with the -a switch)")
 
 args = parser.parse_args()
+
+# Simple print wrapper that accounts for verbosity
+# verbosity is 1 by default
+# verbosity == -1 always prints no matter what (you should most likely just use regular print)
+# TODO: Doesn't accept all parameters for print()
+# TODO: Doesn't really make verbosity clear when looking over code. Maybe use an actual logger instead of this
+def log(string:str="", verbosity:int=1, end="\n"):
+    if (args.verbosity >= verbosity or verbosity == -1): print(string, end=end)
 
 def main():
     filepath = os.path.dirname(args.input.name)
@@ -85,12 +93,12 @@ def main():
             if (not os.path.exists(dir)): raise argparse.ArgumentError(gsArg, f"Path does not exist: {dir}")
             if (    os.path.isfile(dir)): raise argparse.ArgumentError(gsArg, "Must be a directory")
     elif (not args.no_auto_sounds):
-        print("No sound-dir provided, attempting automatic search")
+        log("No sound-dir provided, attempting automatic search")
         args.sound_dir = [os.path.join(filepath, os.path.pardir, "scripts")]
         if (not os.path.exists(os.path.join(args.sound_dir[0], "game_sounds_manifest.txt"))):
-            print(f"Warning: Could not find game_sounds_manifest.txt in {args.sound_dir[0]}")
+            log(f"Warning: Could not find game_sounds_manifest.txt in {args.sound_dir[0]}")
             args.sound_dir = None
-        else: print(f"\tFound sound-dir at {args.sound_dir[0]}")
+        else: log(f"\tFound sound-dir at {args.sound_dir[0]}")
     
     if (filepath == "."): filepath = ""
     filenameNoExt = os.path.splitext(os.path.basename(args.input.name))[0]
@@ -104,7 +112,7 @@ def main():
         #   I don't know how I would fix this other than at least detecting the beginning of the name, since there is only a limited set of those that are usually used
         #   I guess there is also a limited number of languages too but that's a bit much to check for something so frivolous that will likely never be a problem anyway
         if (re.match(r"[a-zA-Z0-9]+_[a-zA-Z0-9]+", filenameNoExt)): language = filenameNoExt.split("_")[1]
-        else: print("WARNING: Input filename does not match regular format, and no language specified. Language will not be set!")
+        else: log("WARNING: Input filename does not match regular format, and no language specified. Language will not be set!")
     
     # Check output file
     outputFile = ""
@@ -115,24 +123,24 @@ def main():
         outputFile = os.path.join(".", filenameNoExt)
         if (not args.no_suffix): outputFile += "_d.txt"
     if (os.path.exists(outputFile)):
-        print("WARNING: Output will overwrite " + outputFile)
+        log("WARNING: Output will overwrite " + outputFile)
         if (not args.accept):
             shouldOverwrite = input("Do you want to overwrite the file? [Y/n]: ")
             if (shouldOverwrite.lower() == "n"):
-                print("Process canceled")
+                log("Process canceled", -1)
                 sys.exit()
     
     with open(args.input.name, mode="rb") as file:
         # Get header data
         MAGIC = file.read(4).decode("ascii")
         if (MAGIC != "VCCD"):
-            print("ERROR: Invalid caption file (MAGIC != \"VCCD\")")
+            log("ERROR: Invalid caption file (MAGIC != \"VCCD\")")
             sys.exit()
         
         # Get header data. We don't need all of this but we get it just in case
         VERSION = int.from_bytes(file.read(4), "little") # Caption file version. This is always 1 from what I know
         if (VERSION != 1):
-            print(f"ERROR: Invalid file version {VERSION}. Version must be 1!")
+            log(f"ERROR: Invalid file version {VERSION}. Version must be 1!")
             sys.exit()
         
         NUM_BLOCKS     = int.from_bytes(file.read(4), "little") # Number of blocks
@@ -144,18 +152,17 @@ def main():
         DIRECTORY_ENTRY_SIZE = 4 + 4 + 2 + 2 # crc hash + block index + offset + length
         DICT_PADDING = 512 - (HEADER_SIZE + DIRECTORY_SIZE * DIRECTORY_ENTRY_SIZE) % 512
         
-        if (args.verbose >= 2):
-            print(f"MAGIC: {MAGIC}")
-            print(f"VERSION: {hex(VERSION)}") 
-            print(f"BLOCKS: {hex(NUM_BLOCKS)}")
-            print(f"BLOCK_SIZE: {hex(BLOCK_SIZE)}")
-            print(f"DIRECTORY_SIZE: {hex(DIRECTORY_SIZE)}")
-            print(f"DATA_OFFSET: {hex(DATA_OFFSET)}")
-            print(f"DIRECTORY_OFFSET: {hex(file.tell())}")
-            print(f"HEADER_SIZE: {HEADER_SIZE}")
-            print(f"DIRECTORY_ENTRY_SIZE: {hex(DIRECTORY_ENTRY_SIZE)}")
-            print(f"DICT_PADDING: {hex(DICT_PADDING)}")
-            print("------------------------------------------------")
+        log(f"MAGIC: {MAGIC}", 3)
+        log(f"VERSION: {hex(VERSION)}", 3)
+        log(f"BLOCKS: {hex(NUM_BLOCKS)}", 3)
+        log(f"BLOCK_SIZE: {hex(BLOCK_SIZE)}", 3)
+        log(f"DIRECTORY_SIZE: {hex(DIRECTORY_SIZE)}", 3)
+        log(f"DATA_OFFSET: {hex(DATA_OFFSET)}", 3)
+        log(f"DIRECTORY_OFFSET: {hex(file.tell())}", 3)
+        log(f"HEADER_SIZE: {HEADER_SIZE}", 3)
+        log(f"DIRECTORY_ENTRY_SIZE: {hex(DIRECTORY_ENTRY_SIZE)}", 3)
+        log(f"DICT_PADDING: {hex(DICT_PADDING)}", 3)
+        log("------------------------------------------------", 3)
         
         # Get all directory entries
         captionDirEntries = getDirEntries(file, HEADER_SIZE, DIRECTORY_SIZE)
@@ -174,34 +181,34 @@ def main():
                 maxCaptionLength = len(name)
                 largestCaption = name
         
-        if (args.verbose >= 2): print(f"MAX CAPTION LENGTH: {maxCaptionLength}, PROVIDED BY: \"{largestCaption}\"")
+        log(f"MAX CAPTION LENGTH: {maxCaptionLength}, PROVIDED BY: \"{largestCaption}\"", 3)
         
         maxCaptionLength += 2 # Account for quotes
         if (not args.no_align and args.padding > 0 and (maxCaptionLength % args.padding) == 0): maxCaptionLength += 1 # Make sure that the padding never ends up being 0 (meaning the key+values are touching each other)
         
-        if (args.verbose >= 2): print(f"MAX CAPTION LENGTH WITH ALIGNMENT: {maxCaptionLength}")
+        log(f"MAX CAPTION LENGTH WITH ALIGNMENT: {maxCaptionLength}", 3)
         
         # Write captions
         writeCaptions(outputFile, finalCaptions, maxCaptionLength, language)
     
-    print(f"Finished. Wrote file at {outputFile}")
+    log(f"Finished. Wrote file at {outputFile}")
 
 # Reads all captions from the file and returns a dict containing the name (or hash) and caption
 def readCaptionBlocks(file:TextIOWrapper, captionDirEntries:dict, soundscriptCandidates:dict, DATA_OFFSET:int, BLOCK_SIZE:int) -> dict:
     attemptingHashMatching = len(soundscriptCandidates) > 0
     
-    print("Reading caption blocks", end="")
+    log("Reading caption blocks", end="")
     if (args.same_hashes):
-        if (attemptingHashMatching): print(", attempting to match hashes to names,", end="")
-        print(" and generating new names", end="")
-        if (attemptingHashMatching): print(" for unfound hashes", end="")
+        if (attemptingHashMatching): log(", attempting to match hashes to names,", end="")
+        log(" and generating new names", end="")
+        if (attemptingHashMatching): log(" for unfound hashes", end="")
     elif (attemptingHashMatching):
-        print(" and attempting to match hashes to names", end="")
-    print("...")
+        log(" and attempting to match hashes to names", end="")
+    log("...")
     
     verbosePrintPadding = ""
     maxCapLen = 10
-    if (args.verbose >= 2):
+    if (args.verbosity >= 3):
         # HACK: We don't have access to the actual maxCaptionLength yet, so we fake it by getting the max length from all candidates
         #   We could preemptively calculate the actual length, but then we would have to do 2 loops through all captions, which is inefficient
         #   This works good enough, worst case scenario the padding is a bit too large. Otherwise we can just set a static max padding, but I feel like that sucks more than this solution
@@ -214,8 +221,8 @@ def readCaptionBlocks(file:TextIOWrapper, captionDirEntries:dict, soundscriptCan
         
         # NOTE: I don't actually know the full specifications of caption files, but assuming the block count can exceed 100,000 the padding here may not always be enough
         #   That would be exceedingly rare if even possible, and likely no caption files even exist with that size so this is fine
-        print("------------------------------------------------")
-        print("| BLOCK".ljust(8, " ") + f"| NAME{verbosePrintPadding} | CAPTION")
+        log("------------------------------------------------", 3)
+        log("| BLOCK".ljust(8, " ") + f"| NAME{verbosePrintPadding} | CAPTION", 3)
     
     # Read each segment and add to output
     # Also attempts to match hashes if the user provided the files
@@ -241,11 +248,10 @@ def readCaptionBlocks(file:TextIOWrapper, captionDirEntries:dict, soundscriptCan
                 captionName = str(soundscriptCandidates[entry["hash"]])
                 ssHashMatches+=1
             else:
-                if (args.verbose >= 2): print("|>", end="")
-                if (args.verbose >= 1):
-                    print(f"\tCould not find match for hash {captionName} (line {captionLineIndex})", end="")
-                    if (args.same_hashes == True): print(". Generating new name... ", end="")
-                    print() # Newline
+                log("|>", 3, end="")
+                log(f"\tCould not find match for hash {captionName} (line {captionLineIndex})", 2, end="")
+                if (args.same_hashes == True): log(". Generating new name... ", 2, end="")
+                log(verbosity=2) # Newline
         
         # Append new string to the end of the caption name (which is just the original hash since we didn't find the real name)
         #   This new appended bit ensures that the hash of this new name matches the original, which allows us to recompile the output exactly the same as the original
@@ -254,45 +260,44 @@ def readCaptionBlocks(file:TextIOWrapper, captionDirEntries:dict, soundscriptCan
         #   We could theoretically fix this by prepending some starting characters to match the order of the surrounding caption names alphabetically, but that's pretty much useless anyway like I said
         if (args.same_hashes == True):
             captionName = generateStrWithNewCRC(str(entry["hash"]).rjust(10, "0")+".", entry["hash"])
-            if (args.verbose >= 2): print(f"|>>\t\tNEW NAME GENERATED: {captionName}")
+            log(f"|>>\t\tNEW NAME GENERATED: {captionName}", 3)
         
         captionLineIndex+=1
         
         finalCaptions[captionName] = caption
         
-        if (args.verbose >= 2):
+        if (args.verbosity >= 3):
             verbosePrintPadding = ""
             for _ in range(maxCapLen - len(captionName)): verbosePrintPadding += " "
-            print("| " + str(entry["index"]).rjust(5, " ") + f" | {captionName}{verbosePrintPadding} | {caption}")
+            log("| " + str(entry["index"]).rjust(5, " ") + f" | {captionName}{verbosePrintPadding} | {caption}", 3)
     
-    if (args.verbose >= 2):
+    if (args.verbosity >= 3):
         verbosePrintPadding = ""
         for _ in range(maxCapLen - 4): verbosePrintPadding += " "
-        print("| BLOCK".ljust(8, " ") + f"| NAME{verbosePrintPadding} | CAPTION")
-        print("------------------------------------------------")
+        log("| BLOCK".ljust(8, " ") + f"| NAME{verbosePrintPadding} | CAPTION", 3)
+        log("------------------------------------------------", 3)
     
     # Theoretically all relevant subtitles should be found (if the user provided the proper paths/files to check), however there might be unused ones left over that no longer exist as soundscripts.
     #   In any case, this means that the relevant game never uses this caption anyway and it is up to the user to remake it if they want to use it.
     #   If there is an existing subtitle .txt file, (then you shouldn't even be using this decompiler anyway, but) it probably has the actual unused soundscript names in it
     if (attemptingHashMatching):
-        print(f"Hashes found: {ssHashMatches}, Expected: {len(captionDirEntries)}")
+        log(f"Hashes found: {ssHashMatches}, Expected: {len(captionDirEntries)}")
         if (ssHashMatches != len(captionDirEntries)):
-            print(f"WARNING: Did not find names for {len(captionDirEntries) - ssHashMatches} captions! (Either we couldn't find them or they are unused)")
+            log(f"WARNING: Did not find names for {len(captionDirEntries) - ssHashMatches} captions! (Either we couldn't find them or they are unused)")
         else:
-            print("All caption names found")
+            log("All caption names found")
     
     return finalCaptions
 
 # Gets all caption directory entries
 def getDirEntries(file:TextIOWrapper, HEADER_SIZE:int, DIRECTORY_SIZE:int) -> list:
-    print("Retrieving captions...")
+    log("Retrieving captions...")
     
     # Make sure file is at the correct location
     file.seek(HEADER_SIZE)
     
-    if (args.verbose >= 2):
-        print("------------------------------------------------")
-        print("| CRC HASH".ljust(13, " ") + "| BLOCK".ljust(8, " ") + "| OFFSET".ljust(9, " ") + "| LENGTH")
+    log("------------------------------------------------", 3)
+    log("| CRC HASH".ljust(13, " ") + "| BLOCK".ljust(8, " ") + "| OFFSET".ljust(9, " ") + "| LENGTH", 3)
     
     entries = []
     for _ in range(DIRECTORY_SIZE):
@@ -308,12 +313,10 @@ def getDirEntries(file:TextIOWrapper, HEADER_SIZE:int, DIRECTORY_SIZE:int) -> li
             "length": LENGTH
         })
         
-        if (args.verbose >= 2):
-            print("| " + str(hex(HASH)).ljust(10, " ") + " | " + str(BLOCK_INDEX).rjust(5, " ") + " | " + str(hex(OFFSET)).ljust(6, " ") + " | " + str(LENGTH).ljust(3, " "))
+        log("| " + str(hex(HASH)).ljust(10, " ") + " | " + str(BLOCK_INDEX).rjust(5, " ") + " | " + str(hex(OFFSET)).ljust(6, " ") + " | " + str(LENGTH).ljust(3, " "), 3)
     
-    if (args.verbose >= 2):
-        print("| CRC HASH".ljust(13, " ") + "| BLOCK".ljust(8, " ") + "| OFFSET".ljust(9, " ") + "| LENGTH")
-        print("------------------------------------------------")
+    log("| CRC HASH".ljust(13, " ") + "| BLOCK".ljust(8, " ") + "| OFFSET".ljust(9, " ") + "| LENGTH", 3)
+    log("------------------------------------------------", 3)
     
     return entries
 
@@ -327,9 +330,9 @@ def getSoundscriptsFromFiles() -> dict:
         
         # Read game_sounds_manifest and extract all referenced files
         if (args.sound_dir):
-            if (args.verbose >= 1): print(f"Checking for soundscript files in {len(args.sound_dir)} locations...")
+            log(f"Checking for soundscript files in {len(args.sound_dir)} locations...", 2)
             for dir in args.sound_dir:
-                if (args.verbose >= 1): print(f"\tChecking {dir}")
+                log(f"\tChecking {dir}", 2)
                 path = os.path.join(dir, "game_sounds_manifest.txt")
                 with open(path, mode="r") as manifest:
                     for fileEntry in Keyvalues.parse(manifest.read())[0]:
@@ -353,9 +356,9 @@ def getSoundscriptsFromFiles() -> dict:
         
         # Read every file and extract all soundscript names
         if (len(gameSoundsFiles) > 0):
-            print("Extracting soundscript names...")
+            log("Extracting soundscript names...")
             for fileEntry in gameSoundsFiles:
-                if (args.verbose >= 1): print(f"\tReading {fileEntry}")
+                log(f"\tReading {fileEntry}", 2)
                 
                 ssCount = 0
                 with open(fileEntry, mode="r") as file:
@@ -363,38 +366,38 @@ def getSoundscriptsFromFiles() -> dict:
                         foundSoundscripts.append(soundScriptName)
                         ssCount+=1
                 
-                if (args.verbose >= 1): print(f"\t\tFound {ssCount} soundscapes in file")
+                log(f"\t\tFound {ssCount} soundscapes in file", 2)
             
-            print(f"Found a total of {len(foundSoundscripts)} soundscripts, {len(set(foundSoundscripts))} unique")
+            log(f"Found a total of {len(foundSoundscripts)} soundscripts, {len(set(foundSoundscripts))} unique")
             foundSoundscripts = list(set(foundSoundscripts)) # Remove duplicates
         else:
-            print(f"Checking {len(foundSoundscripts)} soundscript names")
+            log(f"Checking {len(foundSoundscripts)} soundscript names")
         
         # Get soundscript hashes
-        print("Hashing soundscript names...")
+        log("Hashing soundscript names...")
         for souncscript in foundSoundscripts:
             soundscriptCandidates[zlib.crc32(bytes(souncscript, "utf-8"))] = souncscript
     else:
-        print("No soundscript files provided. Skipping name hash matching")
+        log("No soundscript files provided. Skipping name hash matching")
     
     return soundscriptCandidates
 
 # Writes final caption string and outputs to file
 def writeCaptions(outputFile:TextIOWrapper, finalCaptions:dict, maxCaptionLength:int, language:str):
-    print("Writing captions...")
+    log("Writing captions...")
     
     padChar = "\t"
-    if (args.tabs): padChar = ""
+    if (args.no_tabs): padChar = ""
     if (args.padding > 0):
-        if (args.tabs):
+        if (args.no_tabs):
             padChar = ""
             for _ in range(args.padding):
                 padChar += " "
         
-        if (args.verbose >= 2 and not args.no_align):
-                verbosePrintPadding = ""
-                for _ in range(maxCaptionLength-2 - 7): verbosePrintPadding += " "
-                print(f"| STRING {verbosePrintPadding}| PADDING")
+        if (args.verbosity >= 3 and not args.no_align):
+            verbosePrintPadding = ""
+            for _ in range(maxCaptionLength-2 - 7): verbosePrintPadding += " "
+            log(f"| STRING {verbosePrintPadding}| PADDING", 3)
     
     output = "\"lang\"\n{\n" + padChar + "\"Language\" \"" + language + "\"\n" + padChar + "\"Tokens\"\n" + padChar + "{\n"
     for name in finalCaptions:
@@ -405,26 +408,26 @@ def writeCaptions(outputFile:TextIOWrapper, finalCaptions:dict, maxCaptionLength
             
             # Calculate actual padding alignment
             padAmount = ceil(maxCaptionLength / args.padding) - floor((len(name)+2) / args.padding)
-            if (args.tabs):
+            if (args.no_tabs):
                 innerPadChar = " "
                 padAmount = (maxCaptionLength + (args.padding - (maxCaptionLength % args.padding))) - (len(name)+2)
             
-            if (args.verbose >= 2):
+            if (args.verbosity >= 3):
                 verbosePrintPadding = ""
                 for _ in range(maxCaptionLength-2 - len(name)): verbosePrintPadding += " "
-                print(f"| {name}{verbosePrintPadding}| {padAmount}")
+                log(f"| {name}{verbosePrintPadding}| {padAmount}", 3)
             
             for _ in range(padAmount):
                 paddingAlignment += innerPadChar
         else:
-            print(f"WRITING {name}")
+            log(f"WRITING {name}", 3)
         
         output += f"{padChar}{padChar}\"{name}\"{paddingAlignment}\"{finalCaptions[name]}\"\n"
     
-    if (args.verbose >= 2 and not args.no_align and args.padding > 0):
+    if (args.verbosity >= 3 and not args.no_align and args.padding > 0):
         verbosePrintPadding = ""
         for _ in range(maxCaptionLength-2 - 7): verbosePrintPadding += " "
-        print(f"| STRING {verbosePrintPadding}| PADDING")
+        log(f"| STRING {verbosePrintPadding}| PADDING", 3)
     
     # Final output
     with open(outputFile, mode="w", encoding="utf16") as file:

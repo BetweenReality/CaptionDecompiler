@@ -40,9 +40,9 @@ You can provide the program the path to these files, either the path to the dire
 - `--no-suffix, -ns`                              Disables adding the '_d' suffix to the end of the automatic file name
 - `--padding PADDING, -p PADDING`                 (AKA tab-size) Padding size for the output. Defaults to 4. Note that your editor must match this size to display alignment correctly (if using tabs)
 - `--no-align, -na`                               Disables output caption alignment
-- `--tabs, -t`                                    DISABLES tabs for padding, and instead uses spaces
+- `--no-tabs, -t`                                 DISABLES tabs for padding, and instead uses spaces
 
 - `--accept, -a`                                  Automatically accepts all dialogs. Right now there is only an output file overwrite confirmation
-- `--verbose VERBOSE, -v VERBOSE`                 Increase output verbosity (0 - 2). Defaults to 0
+- `--verbosity VERBOSITY, -v VERBOSITY`           Set output verbosity (0 - 3). Defaults to 1. 0 disables console output, except for required dialogs (which can be auto accepted with the -a switch)
 
 - `-h, --help`                                    Shows the help message and exits
